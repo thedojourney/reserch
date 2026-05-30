@@ -212,7 +212,7 @@ const DEFAULT_DNA = {
   keywords:"워홀, 호주, 뉴질랜드, 정착, 영어, 잡, 수익화, 퍼스널브랜딩, 비자, 세컨드비자"
 };
 
-let STATE = { projects:[], settings:{...DEFAULT_SETTINGS}, dna:{...DEFAULT_DNA}, patterns:[], shared:false };
+let STATE = { projects:[], settings:{...DEFAULT_SETTINGS}, dna:{...DEFAULT_DNA}, patterns:[] };
 let CURRENT="board", DRAFT=null;
 
 const COLS=[
@@ -228,18 +228,20 @@ const TYPE_META={
   notion:{label:"노션",cls:"t-notion",ic:"📝"}
 };
 
-/* ===================== 저장 ===================== */
-async function loadSharedPref(){ try{const r=await window.storage.get("sharedMode",false); if(r&&r.value==="true")STATE.shared=true;}catch(e){} }
+/* ===================== 저장 (localStorage - 어디서나 동작) ===================== */
+function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+const LS_KEYS={settings:"cpd_settings",dna:"cpd_dna",patterns:"cpd_patterns",projects:"cpd_projects"};
 async function loadAll(){
-  try{const r=await window.storage.get("settings",STATE.shared); if(r&&r.value)STATE.settings={...DEFAULT_SETTINGS,...JSON.parse(r.value)};}catch(e){}
-  try{const r=await window.storage.get("dna",STATE.shared); if(r&&r.value)STATE.dna={...DEFAULT_DNA,...JSON.parse(r.value)};}catch(e){}
-  try{const r=await window.storage.get("patterns",STATE.shared); if(r&&r.value)STATE.patterns=JSON.parse(r.value);}catch(e){}
-  try{const r=await window.storage.get("projects",STATE.shared); if(r&&r.value)STATE.projects=JSON.parse(r.value);}catch(e){}
+  try{const v=lsGet(LS_KEYS.settings); if(v)STATE.settings={...DEFAULT_SETTINGS,...JSON.parse(v)};}catch(e){}
+  try{const v=lsGet(LS_KEYS.dna); if(v)STATE.dna={...DEFAULT_DNA,...JSON.parse(v)};}catch(e){}
+  try{const v=lsGet(LS_KEYS.patterns); if(v)STATE.patterns=JSON.parse(v);}catch(e){}
+  try{const v=lsGet(LS_KEYS.projects); if(v)STATE.projects=JSON.parse(v);}catch(e){}
   if(!STATE.settings.provider) STATE.settings.provider="openrouter";
 }
 async function save(key){
   const map={settings:STATE.settings,dna:STATE.dna,patterns:STATE.patterns,projects:STATE.projects};
-  try{await window.storage.set(key,JSON.stringify(map[key]),STATE.shared);}catch(e){toast("저장 실패");}
+  lsSet(LS_KEYS[key],JSON.stringify(map[key]));
 }
 
 /* ===================== Claude API ===================== */
@@ -345,7 +347,7 @@ function renderBoard(){
   document.getElementById("main").innerHTML=`
     <div class="head"><div>
       <div class="kicker">Work Board</div><h1>작업 보드</h1>
-      <p>기획부터 발행까지 콘텐츠 파이프라인 · 전체 ${STATE.projects.length}개${STATE.shared?` · <b style="color:var(--blue)">공유 모드</b>`:""}</p>
+      <p>기획부터 발행까지 콘텐츠 파이프라인 · 전체 ${STATE.projects.length}개</p>
     </div><button class="btn btn-primary" onclick="go('create')">＋ 새 콘텐츠</button></div>
     <div class="board">${cols}</div>`;
 }
@@ -716,9 +718,8 @@ function renderSettings(){
       </div>
     </div>
     <div class="panel pad" style="max-width:760px;margin-top:18px">
-      <div class="field" style="margin:0"><label>협업 · 공유 모드</label>
-        <div style="font-size:12px;color:var(--ink-2);line-height:1.6;margin-bottom:12px">켜면 보드·DNA·아카이브가 <b>이 도구를 함께 여는 모든 사람</b>과 공유됩니다(끄면 나만 보임). 전환 시 화면이 새로고침됩니다.</div>
-        <div class="switch ${STATE.shared?"on":""}" onclick="toggleShared()"><span class="track"></span><span>${STATE.shared?"공유 모드 켜짐":"나만 보기"}</span></div></div>
+      <div class="field" style="margin:0"><label>데이터 저장</label>
+        <div style="font-size:12px;color:var(--ink-2);line-height:1.7">보드·톤 DNA·아카이브·키는 <b>이 브라우저에</b> 저장됩니다(localStorage). 같은 주소를 다른 기기·브라우저에서 열면 데이터는 공유되지 않습니다. 브라우저 데이터를 지우면 함께 삭제되니, 중요한 결과물은 복사해서 따로 보관하세요.</div></div>
     </div>`;
 }
 async function saveSettings(){STATE.settings={...STATE.settings,account:val("s_account"),topic:val("s_topic"),audience:val("s_audience"),goal:val("s_goal"),products:val("s_products")};await save("settings");toast("저장됐어요");}
@@ -739,7 +740,7 @@ async function testConnection(){
   catch(e){ m.style.color="#c0392b";m.textContent="✗ "+e.message; }
   finally{ btn.disabled=false; }
 }
-async function toggleShared(){STATE.shared=!STATE.shared;try{await window.storage.set("sharedMode",STATE.shared?"true":"false",false);}catch(e){}await loadAll();renderSettings();toast(STATE.shared?"공유 모드로 전환":"나만 보기로 전환");}
+async function toggleShared(){}
 
 /* ===================== 유틸 ===================== */
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
@@ -747,5 +748,5 @@ function val(id){const e=document.getElementById(id);return e?e.value.trim():"";
 let TT;function toast(t){const e=document.getElementById("toast");e.textContent=t;e.classList.add("show");clearTimeout(TT);TT=setTimeout(()=>e.classList.remove("show"),2200);}
 
 /* ===================== 부팅 ===================== */
-(async function(){await loadSharedPref();await loadAll();go("board");})();
+(async function(){await loadAll();go("board");})();
 </script>
